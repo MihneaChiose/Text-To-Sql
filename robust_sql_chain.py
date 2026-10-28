@@ -1,47 +1,22 @@
+"""Lanțul Text-to-SQL: generare, execuție, auto-corectare și feedback."""
+
 import os
-import re
-import sqlite3
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_community.utilities import SQLDatabase
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from sqlalchemy import create_engine
 
-
-# ==============================
-# Configuration
-# ==============================
+from database import get_schema, run_query_safe
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DB_PATH = PROJECT_ROOT / "data" / "test_db.sqlite"
-
 load_dotenv(PROJECT_ROOT / ".env")
 
-if not DB_PATH.is_file():
-    raise FileNotFoundError(
-        "Baza de date lipsește. Rulează mai întâi: python create_test_db.py"
-    )
-
-
-def connect_read_only():
-    connection = sqlite3.connect(DB_PATH.as_uri() + "?mode=ro", uri=True)
-    connection.execute("PRAGMA query_only = ON")
-    return connection
-
-
-engine = create_engine("sqlite://", creator=connect_read_only)
-
-db = SQLDatabase(engine)
-
-llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"), temperature=0)
-
-
-# ==============================
-# Prompt Templates
-# ==============================
+llm = ChatOpenAI(
+    model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+    temperature=0,
+)
 
 initial_prompt = ChatPromptTemplate.from_messages(
     [
@@ -62,7 +37,6 @@ Rules:
     ]
 )
 
-
 correction_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -76,7 +50,6 @@ Correct the query. Return ONLY one read-only SELECT query.""",
         ("human", "Fix this query."),
     ]
 )
-
 
 feedback_prompt = ChatPromptTemplate.from_messages(
     [
@@ -97,7 +70,6 @@ Rules:
     ]
 )
 
-
 answer_prompt = ChatPromptTemplate.from_template(
     """You are a data assistant.
 User question: {question}
@@ -113,46 +85,21 @@ Rules:
 )
 
 
-# ==============================
-# Helper Functions
-# ==============================
-
-
 def clean_sql(text: str) -> str:
     return text.replace("```sql", "").replace("```SQL", "").replace("```", "").strip()
 
 
-def run_query_safe(query: str):
-    query = query.strip()
-
-    if not re.match(r"^(SELECT|WITH)\b", query, flags=re.IGNORECASE):
-        return None, "Sunt permise doar interogări de citire (SELECT)."
-
-    try:
-        return db.run(query), None
-
-    except Exception as exc:
-        return None, str(exc)
-
-
-# ==============================
-# SQL Execution and Self-Repair
-# ==============================
-
-
 def execute_and_summarize(sql_query: str, user_question: str):
-    schema_text = db.get_table_info()
+    schema_text = get_schema()
     current_sql = sql_query
     max_retries = 3
 
     for attempt in range(1, max_retries + 1):
         print(f"Încercarea {attempt}: {current_sql}")
-
         result, error = run_query_safe(current_sql)
 
         if error is None:
             answer_chain = answer_prompt | llm | StrOutputParser()
-
             answer = answer_chain.invoke(
                 {
                     "question": user_question,
@@ -160,14 +107,12 @@ def execute_and_summarize(sql_query: str, user_question: str):
                     "result": result,
                 }
             )
-
             return answer, current_sql
 
         print(f"Eroare SQL: {error}")
 
         if attempt < max_retries:
             correction_chain = correction_prompt | llm | StrOutputParser()
-
             current_sql = clean_sql(
                 correction_chain.invoke(
                     {
@@ -181,14 +126,8 @@ def execute_and_summarize(sql_query: str, user_question: str):
     return "Nu am reușit să execut o interogare SQL validă.", None
 
 
-# ==============================
-# Initial SQL Generation
-# ==============================
-
-
 def initial_generation(user_question: str):
-    schema_text = db.get_table_info()
-
+    schema_text = get_schema()
     generation_chain = initial_prompt | llm | StrOutputParser()
 
     sql = clean_sql(
@@ -203,14 +142,12 @@ def initial_generation(user_question: str):
     return execute_and_summarize(sql, user_question)
 
 
-# ==============================
-# Human Feedback
-# ==============================
-
-
-def feedback_generation(user_question: str, old_sql: str, user_feedback: str):
-    schema_text = db.get_table_info()
-
+def feedback_generation(
+    user_question: str,
+    old_sql: str,
+    user_feedback: str,
+):
+    schema_text = get_schema()
     feedback_chain = feedback_prompt | llm | StrOutputParser()
 
     new_sql = clean_sql(
