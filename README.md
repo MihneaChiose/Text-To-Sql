@@ -1,118 +1,419 @@
-Demo: https://youtu.be/1jV4-09x2VQ
 
-# Natural Language to SQL
+# Text-to-SQL Assistant
 
-**Author:** Chiose Mihnea-Stefan  
-**Course:** Baze de Date de la NoSQL la Vector DB's  
+An AI-powered application that translates natural language questions into SQL queries, executes them against a relational database, and presents the results in a conversational interface.
 
----
+Built with **Python, LangChain, OpenAI, SQLAlchemy, SQLite, and Streamlit**.
 
-## 1. Project Overview
-This project implements a **Text-to-SQL system** that allows non-technical users to query a relational database using natural language. This system features a **Self-Repair Mechanism** to automatically fix SQL syntax errors and a **Feedback Section** to correct logical errors or misunderstandings in real-time.
+The application features automatic SQL error recovery, interactive query refinement, read-only database access, and support for Romanian and English questions.
 
-### Key Features
-* **Natural Language Processing:** Converts questions (e.g., "Show me expensive products") into SQL.
-* **Self-Repair SQL:** Automatically detects database errors (e.g., `no such column`) and uses the LLM to repair the query without crashing.
-* **Feedback Loop:** Allows the user to reject a result and provide a reason (e.g., "Sort by price, not date"), which the system uses to regenerate the query.
+## Overview
 
----
+Text-to-SQL Assistant was originally developed as a university database course project and subsequently improved with a modular architecture, safer database execution, automated tests, and a redesigned user interface.
 
-## 2. System Architecture
+The goal is to make relational databases more accessible by allowing users to retrieve information without writing SQL manually.
 
-The system follows a modular architecture integrating a Streamlit frontend with a LangChain processing backend.
+Rather than simply generating SQL, the application implements a multi-step workflow that includes query generation, execution, error detection, automatic correction, and natural language answer generation.
 
-### 2.1 High-Level Architecture Diagram
-![Diagram](Diagram.png)
+## Application Preview
 
-### 2.2 Workflow Description
-1.  **Input:** User asks a question via Streamlit.
-2.  **Generation:** GPT-3.5 generates the initial SQL query based on the schema.
-3.  **Execution & Validation:**
-    * The system attempts to execute the query.
-    * **If Error:** The `correction_prompt` is triggered (Self-Repair loop).
-    * **If Success:** The result is displayed.
-4.  **Feedback:**
-    * If the user offers feedback, the `feedback_prompt` re-generates the query using the user's explanation.
+![Text-to-SQL Assistant interface](docs/screenshots/application.png)
 
----
+## Key Features
 
-## 3. Data Model
+### Natural Language to SQL
 
-The system operates on a SQLite database (`test_db.sqlite`). Below is the Entity-Relationship (ER) schema used for testing.
+Users can ask questions about the database in plain English or Romanian.
 
-| Table Name | Description | Key Columns |
-| :--- | :--- | :--- |
-| **Users** | Registered customers | `id` (PK), `name`, `email`, `signup_date` |
-| **Products** | Inventory items | `id` (PK), `product_name`, `price`, `stock` |
-| **Orders** | Transaction headers | `id` (PK), `user_id` (FK), `order_date`, `total_amount` |
+The system uses the database schema and an OpenAI language model to generate SQLite-compatible SQL queries.
 
+### Automatic SQL Self-Repair
 
----
+When a generated query fails during execution, the application captures the database error and sends it back to the LLM along with the original query and database schema.
 
-## 4. Software & Configuration
+The model attempts to generate a corrected query, with a maximum of three execution attempts.
 
-### 4.1 Technology Stack
-* **Language:** Python 3.10+
-* **LLM Orchestration:** LangChain
-* **Model:** OpenAI `gpt-3.5-turbo`
-* **Database:** SQLite
-* **Frontend:** Streamlit
+This mechanism handles execution errors but does not guarantee that every logically incorrect query will be detected.
 
-### 4.2 Prerequisites & Installation
-1.  Clone the repository.
-2.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  Configure environment variables in `.env`:
-    ```
-    OPENAI_API_KEY=sk-proj-...
-    ```
+### Interactive Query Refinement
 
-### 4.3 Running the Tool
-To start the web interface:
+Users can modify the most recently generated query without starting a new conversation.
+
+Through the **Refine previous query** interface, users can provide additional instructions, such as:
+
+> Only include products with a price greater than 100.
+
+The application uses the original question, previous SQL query, and requested changes to generate and execute an updated query.
+
+### Read-Only Database Execution
+
+Database connections are configured in SQLite read-only mode.
+
+The application also uses `PRAGMA query_only = ON` and performs basic SQL validation before execution.
+
+This prevents the application from modifying the demonstration database through generated SQL queries.
+
+### Multilingual Responses
+
+The assistant supports questions and responses in Romanian and English.
+
+A lightweight language detection mechanism selects the response language and passes explicit instructions to the LLM.
+
+Language detection is heuristic and may be imperfect for ambiguous inputs.
+
+### Conversational Interface
+
+The Streamlit application provides:
+
+- A chat-based interface for natural language questions.
+- Suggested questions for exploring the database.
+- Access to the SQL generated for each answer.
+- A query refinement form.
+- Conversation history within the current session.
+- A conversation reset option.
+- User-friendly API error messages.
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python 3.11 | Application logic |
+| Streamlit | Web interface and session management |
+| LangChain | LLM prompt orchestration and output parsing |
+| OpenAI API | SQL generation, correction, and answer generation |
+| SQLAlchemy | Database connectivity and query execution |
+| SQLite | Relational database |
+| python-dotenv | Environment configuration |
+| pytest | Automated testing |
+
+The default OpenAI model is `gpt-4.1-mini`, configurable through an environment variable.
+
+## System Architecture
+
+The application separates the user interface, LLM orchestration, and database access into independent components.
+
+```mermaid
+flowchart TD
+    A[User Question] --> B[Streamlit Interface]
+    B --> C[SQL Generation]
+    C --> D[OpenAI LLM]
+    D --> E[Generated SQL]
+    E --> F[Read-Only SQL Execution]
+    F --> G[(SQLite Database)]
+    G --> H{Execution Successful?}
+    H -->|No| I[SQL Self-Repair]
+    I --> D
+    H -->|Yes| J[Answer Generation]
+    J --> K[Natural Language Response]
+    K --> B
+    B --> L[Optional Query Refinement]
+    L --> D
+```
+
+### Processing Workflow
+
+1. **User input:** The user submits a natural language question through Streamlit.
+2. **Schema retrieval:** The application retrieves the available SQLite table definitions.
+3. **SQL generation:** LangChain sends the question and schema to the OpenAI model.
+4. **SQL execution:** The generated query is executed using a read-only database connection.
+5. **Error recovery:** If execution fails, the error is provided to the LLM for automatic query correction.
+6. **Answer generation:** The LLM formulates a natural language response using the executed SQL query and its result.
+7. **Query refinement:** The user can optionally request changes to the most recently generated query.
+
+## Database Schema
+
+The application includes a small SQLite database representing a simplified retail system.
+
+| Table | Description | Main Columns |
+|---|---|---|
+| `users` | Customer information | `id`, `name`, `email`, `signup_date` |
+| `products` | Product inventory | `id`, `product_name`, `price`, `stock` |
+| `orders` | Customer orders | `id`, `user_id`, `order_date`, `total_amount` |
+
+The `orders.user_id` column references `users.id`.
+
+The database is generated locally and populated with sample data using `create_test_db.py`.
+
+## Example Usage
+
+**Question:**
+
+> Which product is the most expensive?
+
+**Example generated SQL:**
+
+```sql
+SELECT product_name, price
+FROM products
+ORDER BY price DESC
+LIMIT 1;
+```
+
+**Expected result with the sample dataset:**
+
+> The most expensive product is Laptop Gaming, priced at 1200.50.
+
+The application also supports more complex questions involving filtering, aggregation, ordering, and joins.
+
+For example:
+
+```text
+Show all products and their prices.
+
+What is the total amount spent by each user?
+
+Which users have placed orders?
+
+Show products with a price greater than 100.
+
+How many orders has each user placed?
+```
+
+The generated SQL can be inspected directly in the interface.
+
+## Getting Started
+
+### Prerequisites
+
+Before running the application, make sure you have:
+
+- Python 3.11 installed.
+- Git installed.
+- An OpenAI API key with available API access.
+
+OpenAI API usage is billed separately from ChatGPT subscriptions.
+
+### 1. Clone the Repository
+
 ```bash
-streamlit run app.py
+git clone https://github.com/MihneaChiose/Text-To-Sql.git
+cd Text-To-Sql
 ```
 
----
+### 2. Create a Virtual Environment
 
-## 5. Code Snippets
+**Windows (PowerShell):**
 
-### 5.1 Self-Repair Mechanism (Auto-Correction)
-The system does not crash on SQL errors. Instead, it captures the database exception and feeds it back to the LLM to generate a corrected query.
-
-```
-for attempt in range(MAX_RETRIES):
-    result, error = run_query_safe(current_sql)
-    
-    if error is None:
-        return final_answer, current_sql
-    else:
-        # Error detected: Trigger Correction Prompt
-        chain_fix = correction_prompt | llm | StrOutputParser()
-        current_sql = clean_sql(chain_fix.invoke({
-            "original_query": current_sql,
-            "error_message": error,
-            "schema": schema_text
-        }))
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 5.2 Feedback Prompt
-This prompt enables the system to improve through user corrections within the session.
+**macOS / Linux:**
 
-```
-feedback_system = """You are an SQL assistant refining a query based on user feedback.
-Original Question: {question}
-Previous SQL (Rejected): {original_query}
-User Feedback (Why it was wrong): {feedback}
-Schema: {schema}
-INSTRUCTIONS: Adjust the SQL query to satisfy the user's feedback."""
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
 ```
 
----
+### 3. Install Dependencies
 
-## 6. Bibliographic References
-1. **LangChain Documentation** (2024) SQL Database Chains. Retrieved from https://python.langchain.com/docs/use_cases/sql/
-2. **OpenAI API Reference** (2024) Chat Completions API. Retrieved from https://platform.openai.com/docs/guides/chat
-3. **Streamlit Docs** (2024) Build conversational apps. Retrieved from https://docs.streamlit.io/
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### 4. Configure Environment Variables
+
+Create a `.env` file in the project root.
+
+You can copy the provided `.env.example` file.
+
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item .env.example .env
+```
+
+**macOS / Linux:**
+
+```bash
+cp .env.example .env
+```
+
+Configure the following variables:
+
+```dotenv
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Replace `your_openai_api_key` with a valid OpenAI API key.
+
+The `.env` file is excluded from Git and must not be committed.
+
+### 5. Initialize the Database
+
+Run the following command to create and populate the SQLite database:
+
+```bash
+python create_test_db.py
+```
+
+The script creates `data/test_db.sqlite` and inserts sample records if the database tables are empty.
+
+No separate SQLite server installation is required.
+
+### 6. Run the Application
+
+Start the Streamlit application:
+
+```bash
+python -m streamlit run app.py
+```
+
+Open the local URL displayed in your terminal, normally:
+
+```text
+http://localhost:8501
+```
+
+You can now ask questions about the sample database in English or Romanian.
+
+## Automated Testing
+
+The project uses `pytest` for automated testing.
+
+Tests cover:
+
+- Database schema retrieval.
+- SQL query execution.
+- Read-only database restrictions.
+- SQL error handling.
+- Query result truncation.
+- Initial SQL generation.
+- Automatic SQL self-repair.
+- Query refinement.
+- Retry limits.
+- Romanian and English language detection.
+- Response language configuration.
+
+LLM-dependent tests use mocked responses instead of making real OpenAI API calls.
+
+### Install Development Dependencies
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+### Run the Test Suite
+
+Initialize the sample database first:
+
+```bash
+python create_test_db.py
+```
+
+Then execute:
+
+```bash
+python -m pytest -v
+```
+
+The automated tests validate the application's logic and database operations. They do not measure the real LLM's SQL generation accuracy.
+
+## Project Structure
+
+```text
+Text-To-Sql/
+|
+|-- app.py
+|   Streamlit interface and session state
+|
+|-- robust_sql_chain.py
+|   SQL generation, self-repair, query refinement,
+|   language detection and answer generation
+|
+|-- database.py
+|   Read-only SQLite access and schema retrieval
+|
+|-- create_test_db.py
+|   Sample database creation and initialization
+|
+|-- tests/
+|   |-- test_database.py
+|   |-- test_language.py
+|   |-- test_sql_chain.py
+|
+|-- requirements.txt
+|   Application dependencies
+|
+|-- requirements-dev.txt
+|   Development and testing dependencies
+|
+|-- .env.example
+|   Example environment configuration
+|
+|-- .gitignore
+|
+|-- README.md
+```
+
+The `data/` directory and SQLite database are created locally during initialization.
+
+## Design Decisions
+
+### Separation of Concerns
+
+The application is divided into three main components:
+
+- **Frontend:** Streamlit manages user interaction and conversation state.
+- **LLM layer:** LangChain manages prompt construction, SQL generation, correction, and answer generation.
+- **Database layer:** SQLAlchemy provides isolated, read-only access to SQLite.
+
+This design makes individual components easier to maintain and test.
+
+### Error-Driven SQL Correction
+
+Instead of immediately rejecting SQL queries that produce execution errors, the application attempts to repair them using the database error message.
+
+The correction mechanism has a bounded number of attempts to prevent unlimited retry loops.
+
+### Query Refinement
+
+Query refinement is based on the previous SQL statement and the user's requested changes.
+
+This enables an interactive workflow without retraining or fine-tuning the language model.
+
+### Testability
+
+External LLM calls are mocked in automated tests to make testing deterministic and avoid unnecessary API costs.
+
+Database operations are tested against a locally generated SQLite database.
+
+## Limitations
+
+This project is intended as an educational and portfolio demonstration, not a production-ready database assistant.
+
+Current limitations include:
+
+- SQL generation accuracy depends on the selected language model.
+- The self-repair mechanism targets SQL execution errors and cannot guarantee semantic correctness.
+- The sample database contains a limited number of tables and records.
+- Language detection uses heuristic word matching.
+- Query refinement is maintained within the active session and is not persistent across sessions.
+- Query results passed to the LLM are limited to 100 rows.
+- Read-only connections prevent database modifications but do not provide comprehensive protection against resource-intensive queries or unauthorized data disclosure.
+- The application requires OpenAI API access and an internet connection.
+
+## Future Improvements
+
+Potential future extensions include:
+
+- Evaluating SQL generation accuracy against a benchmark of natural language questions.
+- Adding structured output validation for generated SQL.
+- Implementing query execution timeouts and additional resource limits.
+- Supporting larger and more complex database schemas.
+- Introducing retrieval-augmented schema selection for larger databases.
+- Adding continuous integration for automated testing.
+- Providing a containerized deployment option.
+
+These are potential extensions and are not part of the current implementation.
+
+## Author
+
+**Mihnea-Stefan Chiose**
+
+Originally developed for the university course **Databases: From NoSQL to Vector Databases** and subsequently enhanced as a software engineering portfolio project.
+
+GitHub: [MihneaChiose](https://github.com/MihneaChiose)
