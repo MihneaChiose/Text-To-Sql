@@ -1,6 +1,25 @@
+
+# Python virtual environments
+.venv/
 venv/
+
+# Python cache
 __pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Environment variables and secrets
 .env
-.DS_Store
+
+# IDE settings
+.vscode/
+.idea/
+
+# Local databases
 *.db
 *.sqlite
+*.sqlite3
+
+# Operating system files
+.DS_Store
+Thumbs.db
