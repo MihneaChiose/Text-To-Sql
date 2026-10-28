@@ -1,11 +1,13 @@
+"""Tests for Text-to-SQL generation, execution, repair and refinement."""
+
 import os
 
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-# Tests never contact OpenAI.
-# This placeholder allows ChatOpenAI to initialize locally.
+
+# Tests must not make real OpenAI API calls.
 os.environ.setdefault(
     "OPENAI_API_KEY",
     "sk-test-placeholder-not-a-real-key",
@@ -23,27 +25,40 @@ import robust_sql_chain as sql_chain
 def fake_model(monkeypatch):
     """
     Replace the real LLM with predictable responses.
-    No external API calls are performed.
+
+    Supports SQL generation, SQL correction,
+    query refinement and multilingual answers.
     """
+
     calls = []
 
     def respond(prompt):
         system_text = prompt.to_messages()[0].content
         calls.append(system_text)
 
+        # SQL self-repair
         if "SQL debugger" in system_text:
             return AIMessage(content="SELECT product_name FROM products;")
 
+        # Query refinement
         if "refining a query" in system_text:
             return AIMessage(
                 content=("SELECT product_name FROM products WHERE price > 100;")
             )
 
+        # Initial SQL generation
         if "SQL expert" in system_text:
             return AIMessage(content="SELECT product_name FROM products;")
 
-        if "data assistant" in system_text:
-            return AIMessage(content="Am găsit produsele solicitate.")
+        # Natural-language answer generation
+        if "professional database assistant" in system_text:
+            if "The required answer language is Romanian." in system_text:
+                return AIMessage(content="Am găsit produsele solicitate.")
+
+            if "The required answer language is English." in system_text:
+                return AIMessage(content="I found the requested products.")
+
+            raise AssertionError("The answer language was not specified correctly.")
 
         raise AssertionError("Unexpected prompt sent to the mock model")
 
@@ -109,22 +124,27 @@ def test_invalid_sql_returns_error():
 
 
 # ======================================
-# Initial Generation
+# Initial SQL Generation
 # ======================================
 
 
 def test_initial_generation_without_api_calls(fake_model):
     answer, query = sql_chain.initial_generation("Show all products")
 
-    assert answer == "Am găsit produsele solicitate."
+    assert answer == "I found the requested products."
     assert query == "SELECT product_name FROM products;"
 
-    # SQL generation + natural language answer
+    # SQL generation + answer generation
     assert len(fake_model) == 2
+
+    # The answer prompt must specify English.
+    assert any(
+        "The required answer language is English." in call for call in fake_model
+    )
 
 
 # ======================================
-# Human Feedback
+# Query Refinement
 # ======================================
 
 
@@ -135,11 +155,11 @@ def test_feedback_generation_without_api_calls(fake_model):
         "Only show products above 100",
     )
 
-    assert answer == "Am găsit produsele solicitate."
+    assert answer == "I found the requested products."
 
     assert query == ("SELECT product_name FROM products WHERE price > 100;")
 
-    # Feedback regeneration + answer
+    # Query refinement + answer generation
     assert len(fake_model) == 2
 
 
@@ -154,7 +174,7 @@ def test_self_repair_after_sql_error(fake_model):
         "Show all products",
     )
 
-    assert answer == "Am găsit produsele solicitate."
+    assert answer == "I found the requested products."
     assert query == "SELECT product_name FROM products;"
 
     repair_calls = sum("SQL debugger" in call for call in fake_model)
@@ -176,9 +196,10 @@ def test_self_repair_stops_after_three_attempts(
         system_text = prompt.to_messages()[0].content
 
         assert "SQL debugger" in system_text
+
         repair_calls.append(system_text)
 
-        return AIMessage(content=("SELECT nonexistent_column FROM products;"))
+        return AIMessage(content="SELECT nonexistent_column FROM products;")
 
     monkeypatch.setattr(
         sql_chain,
@@ -192,7 +213,10 @@ def test_self_repair_stops_after_three_attempts(
     )
 
     assert query is None
-    assert "Nu am reușit" in answer
+
+    # The question is in English, so the error
+    # message must also be in English.
+    assert answer == "I could not execute a valid SQL query."
 
     # Three execution attempts, two corrections
     assert len(repair_calls) == 2
