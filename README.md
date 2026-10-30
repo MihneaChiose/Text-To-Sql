@@ -114,7 +114,7 @@ flowchart TD
 
 ## Database Schema
 
-The application is **schema-independent**, dynamically retrieving table structures rather than relying on hardcoded schemas. This allows it to work with different SQLite databases without modifying the core Text-to-SQL logic. Supporting other relational database engines requires adapting the database connection layer.
+The application is **schema-independent**, dynamically retrieving table structures rather than relying on hardcoded schemas. This allows it to work with different SQLite databases without modifying the core Text-to-SQL logic.
 
 For demonstration purposes, the project includes a sample **e-commerce database** with the following tables:
 
