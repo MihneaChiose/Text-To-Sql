@@ -53,14 +53,6 @@ The application also uses `PRAGMA query_only = ON` and performs basic SQL valida
 
 This prevents the application from modifying the demonstration database through generated SQL queries.
 
-### Multilingual Responses
-
-The assistant supports questions and responses in Romanian and English.
-
-A lightweight language detection mechanism selects the response language and passes explicit instructions to the LLM.
-
-Language detection is heuristic and may be imperfect for ambiguous inputs.
-
 ### Conversational Interface
 
 The Streamlit application provides:
