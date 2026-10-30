@@ -236,17 +236,19 @@ Replace `your_openai_api_key` with a valid OpenAI API key.
 
 The `.env` file is excluded from Git and must not be committed.
 
-### 5. Initialize the Database
+### 5. Connect Your Database
 
-Run the following command to create and populate the SQLite database:
+The application is designed to work with **your own SQLite database**, independently of the sample database used during development. It dynamically retrieves the connected database's schema, allowing SQL queries to be generated based on its tables and relationships.
 
-```bash
-python create_test_db.py
-```
+To use your own database, place it at `data/test_db.sqlite` or update `DB_PATH` in `database.py` to point to your database file.
 
-The script creates `data/test_db.sqlite` and inserts sample records if the database tables are empty.
+For **development, testing, and demonstration purposes only**, the project includes `create_test_db.py`, which generates and populates a small sample e-commerce database.
 
-No separate SQLite server installation is required.
+To initialize this optional sample database, run:
+
+`python create_test_db.py`
+
+**You do not need to run this script when connecting your own database.**
 
 ### 6. Run the Application
 
