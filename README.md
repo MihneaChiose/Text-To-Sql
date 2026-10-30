@@ -165,7 +165,7 @@ The generated SQL can be inspected directly in the interface.
 
 ## Getting Started
 
-### Prerequisites
+### Setup
 
 Before running the application, make sure you have:
 
