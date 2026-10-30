@@ -114,7 +114,9 @@ flowchart TD
 
 ## Database Schema
 
-The application includes a small SQLite database representing a simplified retail system.
+The application is **schema-independent**, dynamically retrieving table structures rather than relying on hardcoded schemas. This allows it to work with different SQLite databases without modifying the core Text-to-SQL logic. Supporting other relational database engines requires adapting the database connection layer.
+
+For demonstration purposes, the project includes a sample **e-commerce database** with the following tables:
 
 | Table | Description | Main Columns |
 |---|---|---|
@@ -124,7 +126,7 @@ The application includes a small SQLite database representing a simplified retai
 
 The `orders.user_id` column references `users.id`.
 
-The database is generated locally and populated with sample data using `create_test_db.py`.
+The sample database is automatically generated and populated using `create_test_db.py`.
 
 ## Example Usage
 
