@@ -308,45 +308,6 @@ python -m pytest -v
 
 The automated tests validate the application's logic and database operations. They do not measure the real LLM's SQL generation accuracy.
 
-## Project Structure
-
-```text
-Text-To-Sql/
-|
-|-- app.py
-|   Streamlit interface and session state
-|
-|-- robust_sql_chain.py
-|   SQL generation, self-repair, query refinement,
-|   language detection and answer generation
-|
-|-- database.py
-|   Read-only SQLite access and schema retrieval
-|
-|-- create_test_db.py
-|   Sample database creation and initialization
-|
-|-- tests/
-|   |-- test_database.py
-|   |-- test_language.py
-|   |-- test_sql_chain.py
-|
-|-- requirements.txt
-|   Application dependencies
-|
-|-- requirements-dev.txt
-|   Development and testing dependencies
-|
-|-- .env.example
-|   Example environment configuration
-|
-|-- .gitignore
-|
-|-- README.md
-```
-
-The `data/` directory and SQLite database are created locally during initialization.
-
 ## Design Decisions
 
 ### Separation of Concerns
